@@ -1,0 +1,17 @@
+{
+  "name": "Control Horario - Medio Ambiente Castro",
+  "short_name": "Control Horario",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1a0f",
+  "theme_color": "#0a1a0f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%231a7a42'/%3E%3Ccircle cx='96' cy='96' r='56' fill='none' stroke='white' stroke-width='6'/%3E%3Cpolyline points='96,60 96,96 120,108' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
