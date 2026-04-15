@@ -23,6 +23,7 @@
   .sync-dot{width:6px;height:6px;border-radius:50%}
   .sync.ok{color:var(--accent)}.sync.ok .sync-dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
   .sync.err{color:var(--danger)}.sync.err .sync-dot{background:var(--danger);box-shadow:0 0 6px var(--danger)}
+  .sync.saving{color:var(--dim)}.sync.saving .sync-dot{background:var(--dim);animation:pulse 1s infinite}
   .error-b{margin:12px 24px 0;padding:12px 16px;border-radius:12px;background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.2);color:var(--danger);font-size:13px;display:flex;align-items:center;gap:10px}
   .content{padding:16px 24px 32px}
   .sel{padding:60px 24px 0}
@@ -83,21 +84,20 @@
   .sp{width:36px;height:36px;border:3px solid var(--card-b);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}.ld-t{color:var(--dim);font-size:14px}
   .fade{animation:fadeIn .3s ease}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-
-  /* Notification banner */
   .notif-banner{margin:12px 24px 0;padding:14px 16px;border-radius:12px;background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.2);display:flex;align-items:center;gap:12px;cursor:pointer;transition:opacity .2s}
   .notif-banner:active{opacity:.8}
   .notif-icon{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-d));display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .notif-text{font-size:13px;color:var(--text);line-height:1.4}
-  .notif-text b{color:var(--accent)}
+  .notif-text{font-size:13px;color:var(--text);line-height:1.4}.notif-text b{color:var(--accent)}
 </style>
 </head>
 <body>
 <div class="app" id="app"><div class="ld"><div class="sp"></div><div class="ld-t">Iniciando...</div></div></div>
 
 <script type="module">
+// ─── Firebase LITE (much smaller & faster than full SDK) ───
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
-import { getFirestore, collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, updateDoc, doc, query, where, getDocs, Timestamp }
+  from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore-lite.js';
 
 const app = initializeApp({
   apiKey:"AIzaSyDXyNysl4M_MaRHS6Oa7do7xxj5bywHAoQ",authDomain:"control-horario-mac.firebaseapp.com",
@@ -109,9 +109,8 @@ const colRef = collection(db,"registros_horarios");
 
 const EMP=[{id:"alberto",name:"Alberto Vivanco",ini:"AV"},{id:"michelle",name:"Michelle Monberg",ini:"MM"}];
 
-// ─── State ───
-const S={scr:"select",emp:null,recs:[],loading:false,syncing:false,err:null,notifGranted:Notification.permission==="granted",
-  hMonth:(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;})()};
+const S={scr:"select",emp:null,recs:[],loading:false,saving:false,err:null,notifGranted:typeof Notification!=='undefined'&&Notification.permission==="granted",
+  hMonth:(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;})()};
 
 // ─── Helpers ───
 const fT=d=>new Date(d).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
@@ -136,93 +135,73 @@ const ic={
 };
 
 // ─── Notifications ───
-let swReg = null;
-
-async function initNotifications() {
-  if(!('serviceWorker' in navigator) || !('Notification' in window)) return;
-  try {
-    swReg = await navigator.serviceWorker.register('sw.js');
-    console.log('Service Worker registrado');
-  } catch(e) { console.error('Error registrando SW:', e); }
+let swReg=null;
+async function initNotif(){if(!('serviceWorker' in navigator)||!('Notification' in window))return;try{swReg=await navigator.serviceWorker.register('sw.js');}catch(e){console.error(e);}}
+async function reqPerm(){if(!('Notification' in window))return false;if(Notification.permission==='granted'){S.notifGranted=true;return true;}if(Notification.permission==='denied')return false;const r=await Notification.requestPermission();S.notifGranted=r==='granted';return S.notifGranted;}
+function sendNotif(title,body){if(!swReg||Notification.permission!=='granted')return;swReg.active?.postMessage({type:'SHOW_NOTIFICATION',title,body,tag:'ch-'+Date.now()});}
+function checkNotif(){const n=new Date(),h=n.getHours(),m=n.getMinutes(),dow=n.getDay();if(dow===0||dow===6)return;const sk=`notif_${tK()}`,s=JSON.parse(localStorage.getItem(sk)||'{}');
+  if(h===9&&m===0&&!s.e){sendNotif('⏰ ¡Hora de fichar!','Recuerda registrar tu entrada.');s.e=true;localStorage.setItem(sk,JSON.stringify(s));}
+  if(h===18&&m===0&&!s.s){sendNotif('🏠 ¡Fin de jornada!','No olvides registrar tu salida.');s.s=true;localStorage.setItem(sk,JSON.stringify(s));}
 }
-
-async function requestNotifPermission() {
-  if(!('Notification' in window)) return false;
-  if(Notification.permission === 'granted') { S.notifGranted=true; return true; }
-  if(Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  S.notifGranted = result === 'granted';
-  return S.notifGranted;
-}
-
-function sendNotification(title, body) {
-  if(!swReg || Notification.permission !== 'granted') return;
-  swReg.active?.postMessage({ type:'SHOW_NOTIFICATION', title, body, tag:'control-horario-'+Date.now() });
-}
-
-// Check every 30s if it's notification time (9:00 or 18:00)
-function checkNotifSchedule() {
-  const now = new Date();
-  const h = now.getHours();
-  const m = now.getMinutes();
-  const today = tK();
-
-  // Only on weekdays (Mon-Fri)
-  const dow = now.getDay();
-  if(dow === 0 || dow === 6) return;
-
-  const sentKey = `notif_${today}`;
-  const sent = JSON.parse(localStorage.getItem(sentKey) || '{}');
-
-  // 9:00 - Remind to clock in
-  if(h === 9 && m === 0 && !sent.entrada) {
-    sendNotification('⏰ ¡Hora de fichar!', 'Recuerda registrar tu entrada en Control Horario.');
-    sent.entrada = true;
-    localStorage.setItem(sentKey, JSON.stringify(sent));
-  }
-
-  // 18:00 - Remind to clock out
-  if(h === 18 && m === 0 && !sent.salida) {
-    sendNotification('🏠 ¡Fin de jornada!', 'No olvides registrar tu salida en Control Horario.');
-    sent.salida = true;
-    localStorage.setItem(sentKey, JSON.stringify(sent));
-  }
-
-  // Clean old notification keys (keep only last 7 days)
-  try {
-    for(let i=0; i<localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if(k && k.startsWith('notif_') && k !== sentKey) {
-        const dateStr = k.replace('notif_','');
-        if(dMs(dateStr+'T00:00:00', now.toISOString()) > 7*864e5) localStorage.removeItem(k);
-      }
-    }
-  } catch(e) {}
-}
-
-// Init notifications + schedule checker
-initNotifications();
-setInterval(checkNotifSchedule, 30000);
+initNotif();setInterval(checkNotif,30000);
 
 // ─── Firebase Ops ───
 async function loadRecs(){
   if(!S.emp)return;S.loading=true;S.err=null;render();
-  try{let snap;try{const q=query(colRef,where("empleado_id","==",S.emp.id),orderBy("entrada","asc"));snap=await getDocs(q);}catch(e){const q=query(colRef,where("empleado_id","==",S.emp.id));snap=await getDocs(q);}
-  S.recs=snap.docs.map(d=>{const data=d.data();return{id:d.id,empleado_id:data.empleado_id,empleado_nombre:data.empleado_nombre,entrada:data.entrada?.toDate?data.entrada.toDate().toISOString():data.entrada,salida:data.salida?.toDate?data.salida.toDate().toISOString():data.salida};});
-  S.recs.sort((a,b)=>new Date(a.entrada)-new Date(b.entrada));}catch(e){S.err="Error conectando con Firebase.";console.error(e);}
+  try{
+    const q=query(colRef,where("empleado_id","==",S.emp.id));
+    const snap=await getDocs(q);
+    S.recs=snap.docs.map(d=>{const data=d.data();return{id:d.id,empleado_id:data.empleado_id,empleado_nombre:data.empleado_nombre,
+      entrada:data.entrada?.toDate?data.entrada.toDate().toISOString():data.entrada,
+      salida:data.salida?.toDate?data.salida.toDate().toISOString():data.salida};});
+    S.recs.sort((a,b)=>new Date(a.entrada)-new Date(b.entrada));
+  }catch(e){S.err="Error conectando con Firebase.";console.error(e);}
   S.loading=false;render();
 }
 
-async function clockIn(){
-  S.syncing=true;S.err=null;render();
-  try{await addDoc(colRef,{empleado_id:S.emp.id,empleado_nombre:S.emp.name,entrada:Timestamp.now(),salida:null});await loadRecs();}
-  catch(e){S.err="Error al registrar entrada.";console.error(e);}S.syncing=false;render();
+// ─── OPTIMISTIC clock in: instant UI, Firebase in background ───
+function clockIn(){
+  const now=new Date();const isoNow=now.toISOString();
+  const tempId='_tmp_'+Date.now();
+
+  // 1) Instant UI update
+  S.recs.push({id:tempId,empleado_id:S.emp.id,empleado_nombre:S.emp.name,entrada:isoNow,salida:null});
+  S.saving=true; render();
+
+  // 2) Firebase write in background
+  addDoc(colRef,{empleado_id:S.emp.id,empleado_nombre:S.emp.name,entrada:Timestamp.fromDate(now),salida:null})
+    .then(docRef=>{
+      // Replace temp ID with real Firebase ID
+      const rec=S.recs.find(r=>r.id===tempId);
+      if(rec) rec.id=docRef.id;
+      S.saving=false; S.err=null; render();
+    })
+    .catch(e=>{
+      // Remove temp record on failure
+      S.recs=S.recs.filter(r=>r.id!==tempId);
+      S.saving=false; S.err="Error al guardar entrada. Inténtalo de nuevo."; render();
+      console.error(e);
+    });
 }
 
-async function clockOut(docId){
-  S.syncing=true;S.err=null;render();
-  try{await updateDoc(doc(db,"registros_horarios",docId),{salida:Timestamp.now()});await loadRecs();}
-  catch(e){S.err="Error al registrar salida.";console.error(e);}S.syncing=false;render();
+// ─── OPTIMISTIC clock out: instant UI, Firebase in background ───
+function clockOut(docId){
+  const now=new Date();const isoNow=now.toISOString();
+
+  // 1) Instant UI update
+  const rec=S.recs.find(r=>r.id===docId);
+  if(rec) rec.salida=isoNow;
+  S.saving=true; render();
+
+  // 2) Firebase write in background
+  updateDoc(doc(db,"registros_horarios",docId),{salida:Timestamp.fromDate(now)})
+    .then(()=>{ S.saving=false; S.err=null; render(); })
+    .catch(e=>{
+      // Revert on failure
+      if(rec) rec.salida=null;
+      S.saving=false; S.err="Error al guardar salida. Inténtalo de nuevo."; render();
+      console.error(e);
+    });
 }
 
 // ─── Derived ───
@@ -251,19 +230,13 @@ window.dlExcel=function(){
 };
 
 // ─── Actions ───
-window.selEmp=async function(id){
-  S.emp=EMP.find(e=>e.id===id);S.scr="dashboard";S.recs=[];render();
-  // Request notification permission on first use
-  if(Notification.permission==='default') await requestNotifPermission();
-  S.notifGranted=Notification.permission==='granted';
-  loadRecs();
-};
+window.selEmp=async function(id){S.emp=EMP.find(e=>e.id===id);S.scr="dashboard";S.recs=[];render();if(typeof Notification!=='undefined'&&Notification.permission==='default')await reqPerm();S.notifGranted=typeof Notification!=='undefined'&&Notification.permission==='granted';loadRecs();};
 window.goSel=function(){S.scr="select";S.emp=null;S.recs=[];S.err=null;render();};
 window.goDash=function(){S.scr="dashboard";render();};
 window.goHist=function(){S.scr="history";render();};
 window.doClk=function(){if(isCIn())clockOut(lastE().id);else clockIn();};
 window.chgMonth=function(dir){const[y,m]=S.hMonth.split("-").map(Number);const d=new Date(y,m-1+dir);S.hMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;render();};
-window.reqNotif=async function(){await requestNotifPermission();render();};
+window.reqNotif=async function(){await reqPerm();render();};
 
 // ─── Render ───
 function render(){
@@ -273,23 +246,20 @@ function render(){
     el.innerHTML=`<div class="sel fade"><div class="logo-w"><div class="logo">${ic.clk}</div><h1 class="app-t">Control Horario</h1><p class="app-st">Medio Ambiente Castro</p></div>
     <p class="sel-l">Selecciona tu perfil para fichar</p>
     ${EMP.map(e=>`<button class="emp" onclick="selEmp('${e.id}')"><div class="emp-av">${e.ini}</div><div><div class="emp-n">${e.name}</div><div class="emp-s">Pulsa para acceder</div></div><span class="emp-ar">${ic.ar}</span></button>`).join("")}
-    <p class="legal">Cumplimiento del Real Decreto-ley 8/2019<br>Registro obligatorio de jornada laboral</p></div>`;
-    return;
-  }
+    <p class="legal">Cumplimiento del Real Decreto-ley 8/2019<br>Registro obligatorio de jornada laboral</p></div>`;return;}
 
   if(S.loading){el.innerHTML=`<div class="ld"><div class="sp"></div><div class="ld-t">Cargando registros...</div></div>`;return;}
 
   const tr=todayRecs(),ci=isCIn();
-
-  // Notification banner (show only if not granted yet)
-  const notifBanner = (!S.notifGranted && Notification.permission !== 'denied')
-    ? `<div class="notif-banner" onclick="reqNotif()"><div class="notif-icon">${ic.bell}</div><div class="notif-text"><b>Activar recordatorios</b><br>Te avisaremos a las 9:00 y 18:00 para fichar</div></div>` : '';
+  const syncClass=S.err?'err':S.saving?'saving':'ok';
+  const syncText=S.err?'Sin conexión':S.saving?'Guardando...':'Firebase conectado';
+  const notifB=(!S.notifGranted&&typeof Notification!=='undefined'&&Notification.permission!=='denied')?`<div class="notif-banner" onclick="reqNotif()"><div class="notif-icon">${ic.bell}</div><div class="notif-text"><b>Activar recordatorios</b><br>Te avisaremos a las 9:00 y 18:00 para fichar</div></div>`:'';
 
   if(S.scr==="dashboard"){
     el.innerHTML=`<div class="fade">
       <div class="header"><button class="h-back" onclick="goSel()">${ic.bk} Salir</button><div class="h-brand"><div class="h-title">CONTROL HORARIO</div><div class="h-sub">Medio Ambiente Castro</div></div></div>
-      <div class="sync ${S.err?'err':'ok'}"><div class="sync-dot"></div>${S.err?'Sin conexión':'Firebase conectado'}</div>
-      ${notifBanner}
+      <div class="sync ${syncClass}"><div class="sync-dot"></div>${syncText}</div>
+      ${notifB}
       <div class="content">
         ${S.err?`<div class="error-b"><span>⚠</span>${S.err}</div>`:''}
         <div class="prof"><div class="prof-av">${S.emp.ini}</div><div><div class="prof-n">${S.emp.name}</div><div class="prof-d">${fD(now)}</div></div></div>
@@ -298,13 +268,11 @@ function render(){
           <div class="clk-s" id="cs">:${String(now.getSeconds()).padStart(2,"0")}</div>
           <div class="pill ${ci?'w':'o'}"><div class="pill-d"></div><span class="pill-l">${ci?'TRABAJANDO':'FUERA DE TURNO'}</span></div>
         </div>
-        <button class="clk-btn ${ci?'out':'in'}" onclick="doClk()" ${S.syncing?'disabled':''}>${S.syncing?'REGISTRANDO...':ci?'⏹  REGISTRAR SALIDA':'▶  REGISTRAR ENTRADA'}</button>
+        <button class="clk-btn ${ci?'out':'in'}" onclick="doClk()">${ci?'⏹  REGISTRAR SALIDA':'▶  REGISTRAR ENTRADA'}</button>
         <div class="stats"><div class="st"><div class="st-l">FICHAJES HOY</div><div class="st-v">${tr.length}</div></div><div class="st"><div class="st-l">HORAS HOY</div><div class="st-v a" id="ht">${totalToday()}</div></div></div>
         ${tr.length?`<div class="t-recs"><div class="t-title">REGISTROS DE HOY</div>${tr.map(r=>`<div class="rec"><div class="rec-t"><div class="rec-dot ${r.salida?'d':'a'}"></div><span>${fT(r.entrada)}</span><span class="rec-ar">→</span><span class="${r.salida?'':'rec-on'}">${r.salida?fT(r.salida):'En curso...'}</span></div><span class="rec-dur">${r.salida?msH(dMs(r.entrada,r.salida)):''}</span></div>`).join("")}</div>`:''}
         <button class="hist-btn" onclick="goHist()">${ic.hi} Ver historial completo</button>
-      </div></div>`;
-    return;
-  }
+      </div></div>`;return;}
 
   if(S.scr==="history"){
     const days=mDays(S.hMonth),tMs=days.reduce((s,d)=>s+d.tMs,0);
@@ -314,12 +282,10 @@ function render(){
         <div class="m-nav"><button onclick="chgMonth(-1)">${ic.bn}</button><div class="m-lab">${mLabel(S.hMonth)}</div><button onclick="chgMonth(1)">${ic.fw}</button></div>
         <div class="m-sum"><div><div class="m-tl">TOTAL MES</div><div class="m-tv">${msH(tMs)}</div></div><button class="xl-btn" onclick="dlExcel()">${ic.dl} Excel</button></div>
         ${!days.length?'<div class="empty">Sin registros este mes</div>':days.map(d=>`<div class="dy"><div class="dy-h"><div><span class="dy-d">${fSD(d.date+"T12:00:00")}</span><span class="dy-n">${fDN(d.date+"T12:00:00")}</span></div><span class="dy-t">${msH(d.tMs)}</span></div>${d.entries.map(r=>`<div class="dy-e"><span class="dy-ed">●</span>${fT(r.entrada)} → ${r.salida?fT(r.salida):'En curso'}${r.salida?`<span class="dy-edur">${msH(dMs(r.entrada,r.salida))}</span>`:''}</div>`).join("")}</div>`).join("")}
-      </div></div>`;
-  }
+      </div></div>`;}
 }
 
 setInterval(()=>{const ct=document.getElementById("ct"),cs=document.getElementById("cs"),ht=document.getElementById("ht");if(ct){const n=new Date();ct.textContent=n.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});if(cs)cs.textContent=`:${String(n.getSeconds()).padStart(2,"0")}`;if(ht&&isCIn())ht.textContent=totalToday();}},1000);
-
 render();
 </script>
 </body>
