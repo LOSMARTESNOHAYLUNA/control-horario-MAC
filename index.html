@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Control Horario">
+<meta name="theme-color" content="#0a1a0f">
+<title>Control Horario · Medio Ambiente Castro</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+<style>
+  :root {
+    --bg:#0a1a0f; --card:#0f261a; --card-b:#1a3d2a;
+    --accent:#2ecc71; --accent-d:#1a7a42; --danger:#e74c3c;
+    --text:#e8f0ec; --dim:#7a9988; --surface:#132e1e;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:'DM Sans',system-ui,sans-serif;
+    background:linear-gradient(165deg,var(--bg),#0d2218 50%,#061510);
+    color:var(--text);min-height:100vh;min-height:100dvh;overflow-x:hidden;
+  }
+  .app{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh}
+
+  .header{
+    padding:20px 24px 16px;border-bottom:1px solid var(--card-b);
+    background:rgba(10,26,15,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
+  }
+  .h-back{background:none;border:none;color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:6px;font:14px 'DM Sans',sans-serif;padding:0}
+  .h-brand{text-align:right}
+  .h-title{font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.5px}
+  .h-sub{font-size:11px;color:var(--dim)}
+
+  .sync{display:flex;align-items:center;gap:6px;font-size:11px;padding:8px 24px 0}
+  .sync-dot{width:6px;height:6px;border-radius:50%}
+  .sync.ok{color:var(--accent)}.sync.ok .sync-dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+  .sync.err{color:var(--danger)}.sync.err .sync-dot{background:var(--danger);box-shadow:0 0 6px var(--danger)}
+
+  .error-b{margin:12px 24px 0;padding:12px 16px;border-radius:12px;background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.2);color:var(--danger);font-size:13px;display:flex;align-items:center;gap:10px}
+  .content{padding:16px 24px 32px}
+
+  /* Select */
+  .sel{padding:60px 24px 0}
+  .logo-w{text-align:center;margin-bottom:48px}
+  .logo{width:80px;height:80px;border-radius:20px;margin:0 auto 20px;background:linear-gradient(135deg,var(--accent),var(--accent-d));display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(46,204,113,.2)}
+  .app-t{font-size:22px;font-weight:700;letter-spacing:-.3px}
+  .app-st{color:var(--accent);font-size:13px;font-weight:600;margin-top:6px;letter-spacing:1.5px;text-transform:uppercase}
+  .sel-l{text-align:center;color:var(--dim);font-size:15px;margin-bottom:28px}
+
+  .emp{display:flex;align-items:center;gap:16px;width:100%;padding:18px 20px;margin-bottom:14px;background:var(--card);border:1px solid var(--card-b);border-radius:16px;cursor:pointer;color:var(--text);font-family:inherit;transition:border-color .2s,transform .1s}
+  .emp:active{transform:scale(.98)}
+  .emp-av{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,var(--accent-d),rgba(46,204,113,.13));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--accent);flex-shrink:0}
+  .emp-n{font-size:16px;font-weight:600;text-align:left}
+  .emp-s{font-size:13px;color:var(--dim);margin-top:2px;text-align:left}
+  .emp-ar{margin-left:auto;color:var(--dim)}
+  .legal{text-align:center;color:var(--dim);font-size:11px;margin-top:40px;line-height:1.6}
+
+  /* Dashboard */
+  .prof{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+  .prof-av{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--accent-d),rgba(46,204,113,.13));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--accent)}
+  .prof-n{font-size:18px;font-weight:600}
+  .prof-d{font-size:13px;color:var(--dim);text-transform:capitalize;margin-top:2px}
+
+  .clk-card{text-align:center;padding:32px 20px;background:var(--card);border:1px solid var(--card-b);border-radius:20px;margin-bottom:20px}
+  .clk-t{font-family:'JetBrains Mono',monospace;font-size:56px;font-weight:300;letter-spacing:2px;font-variant-numeric:tabular-nums}
+  .clk-s{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  .pill{display:inline-flex;align-items:center;gap:8px;margin-top:20px;padding:8px 18px;border-radius:30px}
+  .pill.w{background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.2)}
+  .pill.o{background:rgba(231,76,60,.08);border:1px solid rgba(231,76,60,.2)}
+  .pill-d{width:8px;height:8px;border-radius:50%}
+  .pill.w .pill-d{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
+  .pill.o .pill-d{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+  .pill-l{font-size:13px;font-weight:600;letter-spacing:.5px}
+  .pill.w .pill-l{color:var(--accent)}.pill.o .pill-l{color:var(--danger)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .clk-btn{width:100%;padding:18px;border:none;border-radius:16px;font:700 17px 'DM Sans',sans-serif;cursor:pointer;letter-spacing:.5px;color:#fff;transition:opacity .2s,transform .1s}
+  .clk-btn:active{transform:scale(.98)}
+  .clk-btn:disabled{opacity:.7;cursor:wait}
+  .clk-btn.in{background:linear-gradient(135deg,var(--accent),var(--accent-d));box-shadow:0 4px 20px rgba(46,204,113,.25)}
+  .clk-btn.out{background:linear-gradient(135deg,var(--danger),#c0392b);box-shadow:0 4px 20px rgba(231,76,60,.25)}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
+  .st{padding:16px;background:var(--card);border:1px solid var(--card-b);border-radius:14px}
+  .st-l{font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.5px;margin-bottom:6px}
+  .st-v{font-size:24px;font-weight:600}
+  .st-v.a{color:var(--accent)}
+
+  .t-recs{margin-top:20px;padding:16px;background:var(--card);border:1px solid var(--card-b);border-radius:14px}
+  .t-title{font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.5px;margin-bottom:14px}
+  .rec{display:flex;align-items:center;justify-content:space-between;padding:10px 0}
+  .rec+.rec{border-top:1px solid var(--card-b)}
+  .rec-t{display:flex;align-items:center;gap:10px;font-size:14px}
+  .rec-dot{width:6px;height:6px;border-radius:50%}
+  .rec-dot.d{background:var(--dim)}.rec-dot.a{background:var(--accent)}
+  .rec-ar{color:var(--dim);font-size:13px}
+  .rec-on{color:var(--accent)}
+  .rec-dur{font-size:13px;color:var(--dim)}
+
+  .hist-btn{width:100%;padding:14px;margin-top:16px;background:var(--surface);border:1px solid var(--card-b);border-radius:14px;color:var(--text);cursor:pointer;font:600 14px 'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px}
+
+  /* History */
+  .m-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:12px 16px;background:var(--card);border:1px solid var(--card-b);border-radius:14px}
+  .m-nav button{background:none;border:none;color:var(--text);cursor:pointer;padding:4px}
+  .m-lab{font-size:16px;font-weight:600;text-transform:capitalize}
+  .m-sum{padding:14px 16px;margin-bottom:16px;background:rgba(46,204,113,.06);border:1px solid rgba(46,204,113,.15);border-radius:12px;display:flex;justify-content:space-between;align-items:center}
+  .m-tl{font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.5px}
+  .m-tv{font-size:22px;font-weight:700;color:var(--accent);margin-top:2px}
+  .xl-btn{padding:10px 18px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-d));color:#fff;font:700 13px 'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 2px 12px rgba(46,204,113,.25);transition:transform .1s}
+  .xl-btn:active{transform:scale(.96)}
+
+  .dy{padding:14px 16px;margin-bottom:10px;background:var(--card);border:1px solid var(--card-b);border-radius:14px}
+  .dy-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .dy-d{font-size:14px;font-weight:600}
+  .dy-n{font-size:12px;color:var(--dim);margin-left:8px;text-transform:capitalize}
+  .dy-t{font-size:14px;font-weight:600;color:var(--accent)}
+  .dy-e{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);margin-top:4px}
+  .dy-ed{color:var(--accent);font-size:11px}
+  .dy-edur{margin-left:auto;font-size:12px}
+  .empty{text-align:center;padding:40px;color:var(--dim)}
+
+  .ld{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px}
+  .sp{width:36px;height:36px;border:3px solid var(--card-b);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ld-t{color:var(--dim);font-size:14px}
+
+  .fade{animation:fadeIn .3s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="ld"><div class="sp"></div><div class="ld-t">Iniciando...</div></div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js';
+import { getFirestore, collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js';
+
+// ─── Firebase Init ───
+const app = initializeApp({
+  apiKey: "AIzaSyDXyNysl4M_MaRHS6Oa7do7xxj5bywHAoQ",
+  authDomain: "control-horario-mac.firebaseapp.com",
+  projectId: "control-horario-mac",
+  storageBucket: "control-horario-mac.firebasestorage.app",
+  messagingSenderId: "619906204331",
+  appId: "1:619906204331:web:bb9617f013df3e81a32dee"
+});
+const db = getFirestore(app);
+const colRef = collection(db, "registros_horarios");
+
+// ─── Data ───
+const EMP = [
+  { id:"alberto", name:"Alberto Vivanco", ini:"AV" },
+  { id:"michelle", name:"Michelle Monberg", ini:"MM" },
+];
+
+// ─── State ───
+const S = {
+  scr:"select", emp:null, recs:[], loading:false, syncing:false, err:null,
+  hMonth:(()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; })(),
+};
+
+// ─── Helpers ───
+const fT = d => new Date(d).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const fTs = d => new Date(d).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+const fD = d => new Date(d).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+const fSD = d => new Date(d).toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit",year:"numeric"});
+const fDN = d => new Date(d).toLocaleDateString("es-ES",{weekday:"long"});
+const dMs = (a,b) => new Date(b)-new Date(a);
+const msH = ms => { const h=Math.floor(ms/36e5),m=Math.floor((ms%36e5)/6e4); return `${h}h ${String(m).padStart(2,"0")}m`; };
+const dK = d => { const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
+const tK = () => dK(new Date());
+
+// ─── SVG ───
+const ic = {
+  clk:`<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  bk:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>`,
+  fw:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>`,
+  bn:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>`,
+  hi:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 3v5h5"/><path d="M3 8a9 9 0 1 1 1.1 4.4"/><path d="M12 7v5l3 3"/></svg>`,
+  dl:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  ar:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>`,
+};
+
+// ─── Firebase Ops ───
+async function loadRecs() {
+  if(!S.emp) return;
+  S.loading=true; S.err=null; render();
+  try {
+    let snap;
+    try {
+      const q = query(colRef, where("empleado_id","==",S.emp.id), orderBy("entrada","asc"));
+      snap = await getDocs(q);
+    } catch(e) {
+      // Fallback without orderBy (index not created yet)
+      const q = query(colRef, where("empleado_id","==",S.emp.id));
+      snap = await getDocs(q);
+    }
+    S.recs = snap.docs.map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        empleado_id: data.empleado_id,
+        empleado_nombre: data.empleado_nombre,
+        entrada: data.entrada?.toDate ? data.entrada.toDate().toISOString() : data.entrada,
+        salida: data.salida?.toDate ? data.salida.toDate().toISOString() : data.salida,
+      };
+    });
+    S.recs.sort((a,b) => new Date(a.entrada)-new Date(b.entrada));
+  } catch(e) {
+    S.err = "Error conectando con Firebase. Comprueba tu conexión.";
+    console.error(e);
+  }
+  S.loading=false; render();
+}
+
+async function clockIn() {
+  S.syncing=true; S.err=null; render();
+  try {
+    await addDoc(colRef, {
+      empleado_id: S.emp.id,
+      empleado_nombre: S.emp.name,
+      entrada: Timestamp.now(),
+      salida: null,
+    });
+    await loadRecs();
+  } catch(e) { S.err="Error al registrar entrada."; console.error(e); }
+  S.syncing=false; render();
+}
+
+async function clockOut(docId) {
+  S.syncing=true; S.err=null; render();
+  try {
+    await updateDoc(doc(db,"registros_horarios",docId), { salida: Timestamp.now() });
+    await loadRecs();
+  } catch(e) { S.err="Error al registrar salida."; console.error(e); }
+  S.syncing=false; render();
+}
+
+// ─── Derived ───
+const todayRecs = () => { const tk=tK(); return S.recs.filter(r=>dK(r.entrada)===tk); };
+const isCIn = () => { const t=todayRecs(); const l=t[t.length-1]; return l&&!l.salida; };
+const lastE = () => { const t=todayRecs(); return t[t.length-1]; };
+const totalToday = () => { let t=0; todayRecs().forEach(r=>{t+=dMs(r.entrada,r.salida||new Date().toISOString())}); return msH(t); };
+
+function mDays(ms) {
+  const [y,m]=ms.split("-").map(Number);
+  const recs=S.recs.filter(r=>{const d=new Date(r.entrada);return d.getFullYear()===y&&d.getMonth()+1===m;});
+  const bd={};
+  recs.forEach(r=>{const k=dK(r.entrada);if(!bd[k])bd[k]=[];bd[k].push(r);});
+  return Object.entries(bd).sort(([a],[b])=>b.localeCompare(a)).map(([date,entries])=>{
+    let tMs=0; entries.forEach(r=>{if(r.salida)tMs+=dMs(r.entrada,r.salida);}); return {date,entries,tMs};
+  });
+}
+
+function mLabel(ms) { const [y,m]=ms.split("-").map(Number); return new Date(y,m-1).toLocaleDateString("es-ES",{month:"long",year:"numeric"}); }
+
+// ─── Excel ───
+window.dlExcel = function() {
+  const days=mDays(S.hMonth); const rows=[];
+  days.forEach(day=>{
+    day.entries.forEach(r=>{
+      rows.push({"Fecha":fSD(r.entrada),"Día":fDN(r.entrada),"Entrada":fTs(r.entrada),"Salida":r.salida?fTs(r.salida):"—","Horas Totales":r.salida?msH(dMs(r.entrada,r.salida)):"En curso"});
+    });
+  });
+  if(!rows.length)rows.push({Fecha:"Sin registros",Día:"",Entrada:"",Salida:"","Horas Totales":""});
+  const tMs=days.reduce((s,d)=>s+d.tMs,0);
+  rows.push({}); rows.push({Fecha:"TOTAL MES",Día:"",Entrada:"",Salida:"","Horas Totales":msH(tMs)});
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws["!cols"]=[{wch:12},{wch:14},{wch:10},{wch:10},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,mLabel(S.hMonth).slice(0,31));
+  XLSX.writeFile(wb,`Control_Horario_${S.emp.name.replace(/ /g,"_")}_${S.hMonth}.xlsx`);
+};
+
+// ─── Actions (global) ───
+window.selEmp = function(id) { S.emp=EMP.find(e=>e.id===id); S.scr="dashboard"; S.recs=[]; render(); loadRecs(); };
+window.goSel = function() { S.scr="select"; S.emp=null; S.recs=[]; S.err=null; render(); };
+window.goDash = function() { S.scr="dashboard"; render(); };
+window.goHist = function() { S.scr="history"; render(); };
+window.doClk = function() { if(isCIn()) clockOut(lastE().id); else clockIn(); };
+window.chgMonth = function(dir) {
+  const [y,m]=S.hMonth.split("-").map(Number); const d=new Date(y,m-1+dir);
+  S.hMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; render();
+};
+
+// ─── Render ───
+function render() {
+  const el = document.getElementById("app");
+  const now = new Date();
+
+  if(S.scr==="select") {
+    el.innerHTML=`<div class="sel fade">
+      <div class="logo-w"><div class="logo">${ic.clk}</div><h1 class="app-t">Control Horario</h1><p class="app-st">Medio Ambiente Castro</p></div>
+      <p class="sel-l">Selecciona tu perfil para fichar</p>
+      ${EMP.map(e=>`<button class="emp" onclick="selEmp('${e.id}')"><div class="emp-av">${e.ini}</div><div><div class="emp-n">${e.name}</div><div class="emp-s">Pulsa para acceder</div></div><span class="emp-ar">${ic.ar}</span></button>`).join("")}
+      <p class="legal">Cumplimiento del Real Decreto-ley 8/2019<br>Registro obligatorio de jornada laboral</p>
+    </div>`;
+    return;
+  }
+
+  if(S.loading) {
+    el.innerHTML=`<div class="ld"><div class="sp"></div><div class="ld-t">Cargando registros...</div></div>`;
+    return;
+  }
+
+  const tr=todayRecs(), ci=isCIn();
+
+  if(S.scr==="dashboard") {
+    el.innerHTML=`<div class="fade">
+      <div class="header"><button class="h-back" onclick="goSel()">${ic.bk} Salir</button><div class="h-brand"><div class="h-title">CONTROL HORARIO</div><div class="h-sub">Medio Ambiente Castro</div></div></div>
+      <div class="sync ${S.err?'err':'ok'}"><div class="sync-dot"></div>${S.err?'Sin conexión':'Firebase conectado'}</div>
+      <div class="content">
+        ${S.err?`<div class="error-b"><span>⚠</span>${S.err}</div>`:''}
+        <div class="prof"><div class="prof-av">${S.emp.ini}</div><div><div class="prof-n">${S.emp.name}</div><div class="prof-d">${fD(now)}</div></div></div>
+        <div class="clk-card">
+          <div class="clk-t" id="ct">${now.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</div>
+          <div class="clk-s" id="cs">:${String(now.getSeconds()).padStart(2,"0")}</div>
+          <div class="pill ${ci?'w':'o'}"><div class="pill-d"></div><span class="pill-l">${ci?'TRABAJANDO':'FUERA DE TURNO'}</span></div>
+        </div>
+        <button class="clk-btn ${ci?'out':'in'}" onclick="doClk()" ${S.syncing?'disabled':''}>${S.syncing?'REGISTRANDO...':ci?'⏹  REGISTRAR SALIDA':'▶  REGISTRAR ENTRADA'}</button>
+        <div class="stats">
+          <div class="st"><div class="st-l">FICHAJES HOY</div><div class="st-v">${tr.length}</div></div>
+          <div class="st"><div class="st-l">HORAS HOY</div><div class="st-v a" id="ht">${totalToday()}</div></div>
+        </div>
+        ${tr.length?`<div class="t-recs"><div class="t-title">REGISTROS DE HOY</div>${tr.map(r=>`<div class="rec"><div class="rec-t"><div class="rec-dot ${r.salida?'d':'a'}"></div><span>${fT(r.entrada)}</span><span class="rec-ar">→</span><span class="${r.salida?'':'rec-on'}">${r.salida?fT(r.salida):'En curso...'}</span></div><span class="rec-dur">${r.salida?msH(dMs(r.entrada,r.salida)):''}</span></div>`).join("")}</div>`:''}
+        <button class="hist-btn" onclick="goHist()">${ic.hi} Ver historial completo</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  if(S.scr==="history") {
+    const days=mDays(S.hMonth), tMs=days.reduce((s,d)=>s+d.tMs,0);
+    el.innerHTML=`<div class="fade">
+      <div class="header"><button class="h-back" onclick="goDash()">${ic.bk} Volver</button><div style="font-size:14px;font-weight:600">Historial · ${S.emp.name}</div><div style="width:50px"></div></div>
+      <div class="content">
+        <div class="m-nav"><button onclick="chgMonth(-1)">${ic.bn}</button><div class="m-lab">${mLabel(S.hMonth)}</div><button onclick="chgMonth(1)">${ic.fw}</button></div>
+        <div class="m-sum"><div><div class="m-tl">TOTAL MES</div><div class="m-tv">${msH(tMs)}</div></div><button class="xl-btn" onclick="dlExcel()">${ic.dl} Excel</button></div>
+        ${!days.length?'<div class="empty">Sin registros este mes</div>':days.map(d=>`<div class="dy"><div class="dy-h"><div><span class="dy-d">${fSD(d.date+"T12:00:00")}</span><span class="dy-n">${fDN(d.date+"T12:00:00")}</span></div><span class="dy-t">${msH(d.tMs)}</span></div>${d.entries.map(r=>`<div class="dy-e"><span class="dy-ed">●</span>${fT(r.entrada)} → ${r.salida?fT(r.salida):'En curso'}${r.salida?`<span class="dy-edur">${msH(dMs(r.entrada,r.salida))}</span>`:''}</div>`).join("")}</div>`).join("")}
+      </div>
+    </div>`;
+  }
+}
+
+// ─── Clock tick ───
+setInterval(()=>{
+  const ct=document.getElementById("ct"),cs=document.getElementById("cs"),ht=document.getElementById("ht");
+  if(ct){const n=new Date();ct.textContent=n.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});if(cs)cs.textContent=`:${String(n.getSeconds()).padStart(2,"0")}`;if(ht&&isCIn())ht.textContent=totalToday();}
+},1000);
+
+// ─── Init ───
+render();
+</script>
+</body>
+</html>
